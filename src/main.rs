@@ -2,6 +2,7 @@ use dotenvy::dotenv;
 use rand::Rng;
 use sqlx::{Error as SqlxError, SqlitePool};
 use std::sync::Arc;
+use teloxide::sugar::request::RequestReplyExt;
 use teloxide::{prelude::*, types::Message};
 
 pub type AppErr = Box<dyn std::error::Error + Send + Sync>;
@@ -11,7 +12,7 @@ static REPLY_CHANCE: f64 = 0.25;
 
 async fn init_db(pool: &SqlitePool) -> Result<(), SqlxError> {
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS responces (
+        "CREATE TABLE IF NOT EXISTS responses (
             id INTEGER PRIMARY KEY,
             text TEXT NOT NULL
         )",
@@ -61,17 +62,18 @@ async fn main() {
 }
 
 async fn start_handler(msg: Message, bot: Bot, pool: Arc<SqlitePool>) -> HandlerResult {
-    let chat_id = msg.chat.id;
-
-    if msg.chat.is_group() || msg.chat.is_supergroup() {
-        let random_number: f64 = rand::thread_rng().r#gen();
-
-        if random_number < REPLY_CHANCE {
-            if let Some(response) = get_random_response(&pool).await {
-                bot.send_message(chat_id, response).await?;
-            }
-        }
+    if !(msg.chat.is_group() || msg.chat.is_supergroup()) {
+        return Ok(());
     }
 
+    let random_number: f64 = rand::thread_rng().r#gen();
+
+    if random_number < REPLY_CHANCE {
+        if let Some(response) = get_random_response(&pool).await {
+            bot.send_message(msg.chat.id, response)
+                .reply_to(msg.id)
+                .await?;
+        }
+    }
     Ok(())
 }
